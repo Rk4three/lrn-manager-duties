@@ -5,12 +5,14 @@
  */
 
 // Connection Configuration
-$serverName = "10.2.0.9";
+// Connection Configuration
+$serverName = getenv('DB_SERVER');
 $connectionOptions = [
-    "UID" => "rkudo",
-    "PWD" => "Admin?!@#",
-    "Database" => "LRNPH_OJT",
-    "CharacterSet" => "UTF-8"
+    "UID" => getenv('DB_USER'),
+    "PWD" => getenv('DB_PASS'),
+    "Database" => getenv('DB_NAME'),
+    "CharacterSet" => "UTF-8",
+    "LoginTimeout" => 30
 ];
 
 // Create connection
@@ -26,12 +28,16 @@ if ($conn === false) {
 }
 
 // Data Connection (SA) for Cross-Database Access (LRNPH, LRNPH_E)
-$serverNameData = "10.2.0.9";
+// Data Connection (SA) for Cross-Database Access (LRNPH, LRNPH_E)
+// ERROR FIX: Azure Migration - Use same connection details as main DB for now
+// The mock tables (lrn_master_list, lrnph_users) are in the SAME database on Azure.
+$serverNameData = getenv('DB_SERVER');
 $connectionOptionsData = [
-    "UID" => "sa",
-    "PWD" => "S3rverDB02lrn25",
-    "Database" => "LRNPH_OJT", // Base DB, can access others via FQN
-    "CharacterSet" => "UTF-8"
+    "UID" => getenv('DB_USER'),
+    "PWD" => getenv('DB_PASS'),
+    "Database" => getenv('DB_NAME'),
+    "CharacterSet" => "UTF-8",
+    "LoginTimeout" => 30
 ];
 
 $connData = sqlsrv_connect($serverNameData, $connectionOptionsData);
