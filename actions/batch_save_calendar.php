@@ -100,7 +100,7 @@ if ($isSuperAdmin) {
     if ($connML) {
         foreach ($managersInfo as $mid => &$info) {
             $sanitizedName = str_replace("'", "''", $info['Name']);
-            $stmt = sqlsrv_query($connML, "SELECT EmployeeID, Department FROM LRNPH_E.dbo.lrn_master_list WHERE FirstName + ' ' + LastName = '$sanitizedName'");
+            $stmt = sqlsrv_query($connML, "SELECT EmployeeID, Department FROM lrn_master_list WHERE FirstName + ' ' + LastName = '$sanitizedName'");
             if ($stmt && $row = sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC)) {
                 $info['EmployeeID'] = $row['EmployeeID'];
                 $info['Department'] = $row['Department'];

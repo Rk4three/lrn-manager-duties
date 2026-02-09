@@ -65,8 +65,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             ml.PositionTitle,
             ml.EmployeeID,
             ml.BiometricsID
-            FROM LRNPH.dbo.lrnph_users lu
-            LEFT JOIN LRNPH_E.dbo.lrn_master_list ml 
+            FROM lrnph_users lu
+            LEFT JOIN lrn_master_list ml 
             ON lu.username = ml.BiometricsID COLLATE DATABASE_DEFAULT
             WHERE lu.username = ?";
 
@@ -124,7 +124,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
         if ($needsRehash) {
             $newHash = password_hash($password, PASSWORD_DEFAULT);
-            $updateSql = "UPDATE LRNPH.dbo.lrnph_users SET password = ? WHERE username = ?";
+            $updateSql = "UPDATE lrnph_users SET password = ? WHERE username = ?";
             sqlsrv_query($connData, $updateSql, array($newHash, $username));
         }
 

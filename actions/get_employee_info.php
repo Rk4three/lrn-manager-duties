@@ -52,7 +52,7 @@ if (file_exists($csvPath)) {
 if ($employeeID && $connData) {
     try {
         $sql = "SELECT TOP 1 EmployeeID, Department, FullName
-                FROM LRNPH_E.dbo.lrn_master_list 
+                FROM lrn_master_list 
                 WHERE EmployeeID = ? AND IsActive = 1";
 
         $result = sqlsrv_query($connData, $sql, [$employeeID]);
@@ -75,7 +75,7 @@ if ($employeeID && $connData) {
     // Fallback: If CSV didn't have EMPCODE, try to find in lrn_master_list by name
     try {
         $sql = "SELECT TOP 1 EmployeeID, Department 
-                FROM LRNPH_E.dbo.lrn_master_list 
+                FROM lrn_master_list 
                 WHERE FullName LIKE ? AND IsActive = 1
                 ORDER BY EmployeeID DESC";
 

@@ -99,12 +99,12 @@ if (isset($targetUser)) {
     // We need to match Name to Master List to get accurate EmployeeID/Department if possible
     // DM_Users usually stores Name. 
     $sanitizedName = str_replace("'", "''", $managerName);
-    $mlSql = "SELECT EmployeeID, Department FROM LRNPH_E.dbo.lrn_master_list WHERE FirstName + ' ' + LastName = '$sanitizedName'";
+    $mlSql = "SELECT EmployeeID, Department FROM lrn_master_list WHERE FirstName + ' ' + LastName = '$sanitizedName'";
     $mlInfo = dbQueryOne($mlSql); // This relies on global $connData if dbQueryOne uses correct conn? 
     // Wait, dbQueryOne uses $conn (Application DB). Master List is $connData.
     // We should use sqlsrv_query with $connData directly.
 
-    $stmtML = sqlsrv_query($connData, "SELECT EmployeeID, Department FROM LRNPH_E.dbo.lrn_master_list WHERE FirstName + ' ' + LastName = ?", array($managerName));
+    $stmtML = sqlsrv_query($connData, "SELECT EmployeeID, Department FROM lrn_master_list WHERE FirstName + ' ' + LastName = ?", array($managerName));
     if ($stmtML && $rowML = sqlsrv_fetch_array($stmtML, SQLSRV_FETCH_ASSOC)) {
         $employeeID = $rowML['EmployeeID'];
         $department = $rowML['Department'];

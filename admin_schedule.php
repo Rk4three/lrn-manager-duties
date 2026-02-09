@@ -34,17 +34,19 @@ if ($managers === false) {
 // Given list is small (managers), per-user or bulk fetch is fine. Let's do bulk fetch of all master list since we can't JOIN easily on Name.
 // Or better: Collect names, query master list for those names.
 $managerNames = array_map(function ($m) {
-    return $m['Name']; }, $managers);
+    return $m['Name'];
+}, $managers);
 
 // Clean names for SQL IN clause (handle quotes)
 $cleanNames = array_map(function ($n) {
-    return str_replace("'", "''", $n); }, $managerNames);
+    return str_replace("'", "''", $n);
+}, $managerNames);
 $nameListStr = "'" . implode("', '", $cleanNames) . "'";
 
 $departments = [];
 if (!empty($cleanNames)) {
     $deptQuery = "SELECT FirstName + ' ' + LastName as FullName, Department 
-                  FROM LRNPH_E.dbo.lrn_master_list 
+                  FROM lrn_master_list 
                   WHERE (FirstName + ' ' + LastName) IN ($nameListStr)";
 
     $stmtDept = sqlsrv_query($connData, $deptQuery);
@@ -314,9 +316,11 @@ if ($schedules) {
     // Safer to fetch fresh for this batch.
 
     $schedManagerNames = array_map(function ($s) {
-        return $s['ManagerName']; }, $schedules);
+        return $s['ManagerName'];
+    }, $schedules);
     $schedCleanNames = array_map(function ($n) {
-        return str_replace("'", "''", $n); }, $schedManagerNames);
+        return str_replace("'", "''", $n);
+    }, $schedManagerNames);
 
     // Filter out names we might already have from step 1 to save DB calls?
     // Given simplicity, just re-fetch or use cache array.
@@ -324,7 +328,7 @@ if ($schedules) {
     if (!empty($schedCleanNames)) {
         $nameListStrS = "'" . implode("', '", $schedCleanNames) . "'";
         $deptQueryS = "SELECT FirstName + ' ' + LastName as FullName, Department 
-                       FROM LRNPH_E.dbo.lrn_master_list 
+                       FROM lrn_master_list 
                        WHERE (FirstName + ' ' + LastName) IN ($nameListStrS)";
 
         $stmtDeptS = sqlsrv_query($connData, $deptQueryS);

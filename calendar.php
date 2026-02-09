@@ -34,7 +34,7 @@ if ($isSuperAdmin) {
 
             $departments = [];
             $deptQuery = "SELECT FirstName + ' ' + LastName as FullName, Department 
-                          FROM LRNPH_E.dbo.lrn_master_list 
+                          FROM lrn_master_list 
                           WHERE (FirstName + ' ' + LastName) IN ($nameListStr)";
 
             // Use connData for cross-db access
@@ -1312,7 +1312,7 @@ if ($entries) {
 
             // If Super Admin, show scope options
             const isSuper = document.body.dataset.isSuperAdmin === '1';
-            
+
             if (isSuper) {
                 loadManagersForDelete(Array.from(selectedDates));
             }
