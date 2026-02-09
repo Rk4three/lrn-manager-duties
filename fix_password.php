@@ -5,8 +5,12 @@ require_once 'config/db.php';
 echo "<h1>Fix Password for User 1001</h1>";
 
 $username = '1001';
-// Hash for 'password123' (taken from debug output to ensure consistency)
-$newHash = '$2y$10$GKQJ9S.wUcnEvqS9GUDG8.xXsCngiR7IuYnpqp.qU0g2ghlXzN8mu';
+$password = 'password123';
+
+// Generate a fresh bcrypt hash for 'password123'
+$newHash = password_hash($password, PASSWORD_DEFAULT);
+
+echo "<p><strong>Generated Hash:</strong> $newHash</p>";
 
 // Update lrnph_users
 $sql = "UPDATE lrnph_users SET password = ? WHERE username = ?";
@@ -20,7 +24,16 @@ if ($stmt === false) {
     $rowsAffected = sqlsrv_rows_affected($stmt);
     echo "Update executed. Rows affected: " . $rowsAffected . "<br>";
     if ($rowsAffected > 0) {
-        echo "<h2 style='color:green'>SUCCESS: Password for 1001 reset to 'password123'</h2>";
+        echo "<h2 style='color:green'>SUCCESS: Password for user $username reset to '$password'</h2>";
+
+        // Verify the hash works
+        echo "<h3>Verification Test:</h3>";
+        if (password_verify($password, $newHash)) {
+            echo "<p style='color:green'>✓ Password verification test PASSED</p>";
+        } else {
+            echo "<p style='color:red'>✗ Password verification test FAILED</p>";
+        }
+
         echo "<p>You can now <a href='login.php'>Login</a>.</p>";
     } else {
         echo "<h2 style='color:orange'>WARNING: No rows updated. User 1001 might not exist or password was already set.</h2>";
