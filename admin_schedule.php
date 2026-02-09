@@ -98,6 +98,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $managerId = (int) $_POST['manager_id'];
             $scheduleDate = $_POST['schedule_date'];
 
+            if ($managerId <= 0) {
+                $_SESSION['message'] = "Please select a valid manager from the list.";
+                $_SESSION['messageType'] = "error";
+                $redirect();
+            }
+
             $timeline = $_POST['timeline'] ?? '';
             $validTimelines = ['8:00AM - 5:00PM', '8:00PM - 5:00AM'];
 
@@ -664,14 +670,14 @@ if ($quickAssignmentSchedules !== false) {
                                                 // We can't easily check against the specific ID's name without looking it up again
                                                 // But if isOptionSelected is false, it means they typed.
                                                 if (!isOptionSelected) {
-                                                     // If they typed and didn't select, clear it to enforce selection
-                                                     if (!hiddenInput.value) input.value = '';
-                                                     // Ideally if they typed 'John' matching 'John Doe' partly, we force selection.
-                                                     // But for now, if they didn't click, we clear IF the ID was empty.
-                                                     // If ID was NOT empty (previous selection), but they typed garbage, we should probably reset to previous or clear.
-                                                     // Let's clear to be safe.
-                                                     // hiddenInput.value = ''; 
-                                                     // input.value = '';
+                                                    // If they typed and didn't select, clear it to enforce selection
+                                                    if (!hiddenInput.value) input.value = '';
+                                                    // Ideally if they typed 'John' matching 'John Doe' partly, we force selection.
+                                                    // But for now, if they didn't click, we clear IF the ID was empty.
+                                                    // If ID was NOT empty (previous selection), but they typed garbage, we should probably reset to previous or clear.
+                                                    // Let's clear to be safe.
+                                                    // hiddenInput.value = ''; 
+                                                    // input.value = '';
                                                 }
                                             }
                                         }
@@ -712,12 +718,23 @@ if ($quickAssignmentSchedules !== false) {
                         </div>
                     </div>
 
-                    <button type="button" onclick="showAddConfirmModal()"
+                    <button type="submit" onclick="return validateScheduleForm()"
                         class="w-full bg-brand-600 hover:bg-brand-500 text-white font-bold py-3 rounded-xl shadow-lg shadow-brand-600/20 hover:shadow-brand-600/40 transform hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2">
                         <i class="fas fa-calendar-plus"></i>
                         <span>Assign Schedule</span>
                     </button>
                 </form>
+
+                <script>
+                function validateScheduleForm() {
+                    const mgrId = document.getElementById('manager_id').value;
+                    if (!mgrId) {
+                        alert("Please select a manager from the dropdown list.");
+                        return false;
+                    }
+                    return true;
+                }
+                </script>
             </div>
 
             <!-- Quick Assignment (Current Page Schedules) -->

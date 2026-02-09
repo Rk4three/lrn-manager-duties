@@ -191,6 +191,11 @@ if ($entryID) {
     if ($result) {
         echo json_encode(['success' => true, 'message' => 'Entry saved successfully', 'entry_id' => $entryID]);
     } else {
-        echo json_encode(['success' => false, 'message' => 'Failed to save entry']);
+        $errors = sqlsrv_errors();
+        $errorMsg = 'Failed to save entry';
+        if ($errors) {
+            $errorMsg .= ': ' . print_r($errors, true);
+        }
+        echo json_encode(['success' => false, 'message' => $errorMsg]);
     }
 }

@@ -1060,7 +1060,8 @@ if ($entries) {
                 if (typeof currentView !== 'undefined' && currentView === 'all') {
                     openDayDetail(date);
                 } else {
-                    openEntryModal(date, id);
+                    const isSuper = document.body.dataset.isSuperAdmin === '1';
+                    openEntryModal(date, id, isSuper);
                 }
             }
         }
