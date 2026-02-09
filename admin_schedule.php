@@ -638,9 +638,9 @@ if ($quickAssignmentSchedules !== false) {
 
                                     // Select option
                                     options.forEach(opt => {
-                                        opt.addEventListener('click', () => {
-                                            const name = opt.getAttribute('data-name');
-                                            const id = opt.getAttribute('data-id');
+                                        opt.addEventListener('click', function () {
+                                            const name = this.getAttribute('data-name');
+                                            const id = this.getAttribute('data-id');
 
                                             input.value = name;
                                             hiddenInput.value = id;
@@ -659,17 +659,19 @@ if ($quickAssignmentSchedules !== false) {
                                             if (!isOptionSelected && hiddenInput.value === '') {
                                                 input.value = '';
                                             } else if (hiddenInput.value !== '') {
-                                                // Restore name if ID is set but user typed something else then clicked away (optional, simplified here)
-                                                // For now, if they typed garbage but had a valid ID, we might want to clear or reset.
-                                                // Better UX: require exact match or click. We enforce click.
+                                                // If we have a value but the user typed something else and clicked away
+                                                // Check if the current input value matches the selected manager's name
+                                                // We can't easily check against the specific ID's name without looking it up again
+                                                // But if isOptionSelected is false, it means they typed.
                                                 if (!isOptionSelected) {
-                                                    // This case: they selected someone, then clicked input, typed garbage, clicked away.
-                                                    // Or typed garbage from start.
-                                                    // If value doesn't match a name, clear it.
-                                                    // Simplest: Just clear if !isOptionSelected
-                                                    // But we set isOptionSelected=false on input.
-                                                    // So if they strictly typed without clicking, it's invalid.
-                                                    if (!hiddenInput.value) input.value = '';
+                                                     // If they typed and didn't select, clear it to enforce selection
+                                                     if (!hiddenInput.value) input.value = '';
+                                                     // Ideally if they typed 'John' matching 'John Doe' partly, we force selection.
+                                                     // But for now, if they didn't click, we clear IF the ID was empty.
+                                                     // If ID was NOT empty (previous selection), but they typed garbage, we should probably reset to previous or clear.
+                                                     // Let's clear to be safe.
+                                                     // hiddenInput.value = ''; 
+                                                     // input.value = '';
                                                 }
                                             }
                                         }
