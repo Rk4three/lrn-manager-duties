@@ -12,9 +12,9 @@ $newHash = password_hash($password, PASSWORD_DEFAULT);
 
 echo "<p><strong>Generated Hash:</strong> $newHash</p>";
 
-// Update lrnph_users
-$sql = "UPDATE lrnph_users SET password = ? WHERE username = ?";
-$params = [$newHash, $username];
+// Update ALL users in lrnph_users
+$sql = "UPDATE lrnph_users SET password = ?";
+$params = [$newHash];
 
 $stmt = sqlsrv_query($conn, $sql, $params);
 
