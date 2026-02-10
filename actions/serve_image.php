@@ -25,7 +25,7 @@ $entry = null;
 
 if ($photoId) {
     // New logic: fetch by photo ID
-    $query = "SELECT ImageData, MimeType, FilePath FROM DM_Checklist_Photos WHERE ID = ?";
+    $query = "SELECT MimeType, FilePath FROM DM_Checklist_Photos WHERE ID = ?";
     $entry = dbQueryOne($query, [$photoId]);
 } else {
     // Legacy logic: fetch from entries
@@ -48,12 +48,17 @@ if ($filePath) {
     // Construct absolute path. stored as relative "uploads/..."
     $absolutePath = __DIR__ . '/../' . $filePath;
 
+    // DEBUG: Log path check
+    error_log("ServeImage: PhotoID=$photoId Path=$absolutePath Exists=" . (file_exists($absolutePath) ? 'YES' : 'NO'));
+
     if (file_exists($absolutePath)) {
         header('Content-Type: ' . $mimeType);
         header('Cache-Control: public, max-age=86400');
         header('Content-Length: ' . filesize($absolutePath));
         readfile($absolutePath);
         exit();
+    } else {
+        error_log("ServeImage: File missing at $absolutePath");
     }
     // If file missing but record says it should be there -> Error or Fallback to blob?
     // Let's fallback to blob just in case migration copy failed but we didn't wipe data yet.

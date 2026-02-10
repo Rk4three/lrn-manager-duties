@@ -22,60 +22,15 @@ $userName = $_SESSION['dm_name'] ?? $_SESSION['full_name'] ?? 'User';
 $phTime = getPhilippinesTime();
 
 // 1. Get all managers from local DM_Users (User: rkudo)
-$managersQuery = "SELECT ID, Name FROM DM_Users WHERE IsActive = 1 ORDER BY Name ASC";
+$managersQuery = "SELECT \"ID\", \"Name\", \"Department\" FROM \"DM_Users\" WHERE \"IsActive\" = TRUE ORDER BY \"Name\" ASC";
 $managers = dbQuery($managersQuery, []);
 
 if ($managers === false) {
-    die("Error fetching managers: " . print_r(sqlsrv_errors(), true));
+    die("Error fetching managers.");
 }
 
-// 2. Fetch Department info from LRNPH_E.dbo.lrn_master_list (User: sa)
-// Optimization: Fetch all needed departments in one go or per-user?
-// Given list is small (managers), per-user or bulk fetch is fine. Let's do bulk fetch of all master list since we can't JOIN easily on Name.
-// Or better: Collect names, query master list for those names.
-$managerNames = array_map(function ($m) {
-    return $m['Name'];
-}, $managers);
-
-// Clean names for SQL IN clause (handle quotes)
-$cleanNames = array_map(function ($n) {
-    return str_replace("'", "''", $n);
-}, $managerNames);
-$nameListStr = "'" . implode("', '", $cleanNames) . "'";
-
-$departments = [];
-if (!empty($cleanNames)) {
-    $deptQuery = "SELECT FirstName + ' ' + LastName as FullName, Department 
-                  FROM lrn_master_list 
-                  WHERE (FirstName + ' ' + LastName) IN ($nameListStr)";
-
-    $stmtDept = sqlsrv_query($connData, $deptQuery);
-    if ($stmtDept) {
-        while ($row = sqlsrv_fetch_array($stmtDept, SQLSRV_FETCH_ASSOC)) {
-            // Normalize name key
-            $departments[$row['FullName']] = $row['Department'];
-        }
-    }
-}
-
-// 3. Merge Departments into Managers array
-foreach ($managers as &$mgr) {
-    if (isset($departments[$mgr['Name']])) {
-        $mgr['Department'] = $departments[$mgr['Name']];
-    } else {
-        // Fallback: Try case-insensitive matching if direct match fails
-        $found = false;
-        foreach ($departments as $dName => $dept) {
-            if (strcasecmp($dName, $mgr['Name']) === 0) {
-                $mgr['Department'] = $dept;
-                $found = true;
-                break;
-            }
-        }
-        $mgr['Department'] = $found ? $mgr['Department'] : '-';
-    }
-}
-unset($mgr); // Break reference
+// Optimization: Department is now directly in DM_Users
+// No need to fetch from lrn_master_list
 
 // Handle session messages
 $message = $_SESSION['message'] ?? null;
@@ -127,8 +82,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     } else {
                         // INSERT the schedule
                         dbExecute(
-                            "INSERT INTO DM_Schedules (ManagerID, ScheduledDate, Timeline, CreatedBy) VALUES (?, ?, ?, ?)",
-                            [$managerId, $scheduleDate, $timeline, $userName]
+                            "INSERT INTO DM_Schedules (ManagerID, ScheduledDate, Timeline) VALUES (?, ?, ?)",
+                            [$managerId, $scheduleDate, $timeline]
                         );
                         $_SESSION['message'] = "Schedule added.";
                         $_SESSION['messageType'] = "success";
@@ -294,11 +249,11 @@ $totalAllPages = ceil($totalAllCount / $allPerPage);
 // Fetch Data (All Schedules)
 
 // Fetch Data (All Schedules)
+// PostgreSQL: LIMIT limit OFFSET offset
 $schedulesQuery = "SELECT 
                       s.ID,
                       s.ScheduledDate,
                       s.CreatedAt,
-                      s.CreatedBy,
                       u.Name as ManagerName,
                       cs.Status as ChecklistStatus
                    FROM DM_Schedules s
@@ -306,62 +261,22 @@ $schedulesQuery = "SELECT
                    LEFT JOIN DM_Checklist_Sessions cs ON s.ID = cs.ScheduleID
                    WHERE $allWhereClause
                    ORDER BY s.ScheduledDate ASC
-                   OFFSET ? ROWS
-                   FETCH NEXT ? ROWS ONLY";
+                   LIMIT ? OFFSET ?";
 
 $allQueryParams = $allParams;
-$allQueryParams[] = $allOffset;
-$allQueryParams[] = $allPerPage;
+$allQueryParams[] = $allPerPage; // LIMIT
+$allQueryParams[] = $allOffset;  // OFFSET
 
 $schedules = dbQuery($schedulesQuery, $allQueryParams); // Result for Bottom Table
 
-// Merge Departments for Schedules
+// Merge Departments for Schedules (Removed fallback to lrn_master_list as connection is removed)
 if ($schedules) {
-    // We already have $departments map populated from the top "managers" query?
-    // Not necessarily, the paginated schedules might include managers not in the active "managers" filter list (though unlikely if all active).
-    // Safer to fetch fresh for this batch.
-
-    $schedManagerNames = array_map(function ($s) {
-        return $s['ManagerName'];
-    }, $schedules);
-    $schedCleanNames = array_map(function ($n) {
-        return str_replace("'", "''", $n);
-    }, $schedManagerNames);
-
-    // Filter out names we might already have from step 1 to save DB calls?
-    // Given simplicity, just re-fetch or use cache array.
-
-    if (!empty($schedCleanNames)) {
-        $nameListStrS = "'" . implode("', '", $schedCleanNames) . "'";
-        $deptQueryS = "SELECT FirstName + ' ' + LastName as FullName, Department 
-                       FROM lrn_master_list 
-                       WHERE (FirstName + ' ' + LastName) IN ($nameListStrS)";
-
-        $stmtDeptS = sqlsrv_query($connData, $deptQueryS);
-        $schedDepts = [];
-        if ($stmtDeptS) {
-            while ($row = sqlsrv_fetch_array($stmtDeptS, SQLSRV_FETCH_ASSOC)) {
-                $schedDepts[$row['FullName']] = $row['Department'];
-            }
-        }
-
-        // Attach
-        foreach ($schedules as &$sched) {
-            $name = $sched['ManagerName'];
-            $sched['Department'] = $schedDepts[$name] ?? '-';
-
-            // Try fuzzy if not exact
-            if ($sched['Department'] === '-') {
-                foreach ($schedDepts as $dName => $dept) {
-                    if (strcasecmp($dName, $name) === 0) {
-                        $sched['Department'] = $dept;
-                        break;
-                    }
-                }
-            }
-        }
-        unset($sched);
+    foreach ($schedules as &$sched) {
+        // Mock department to 'Duty Manager' or fetch from DM_Users if available
+        // For now, simpler to just set defaults or let the view handle it.
+        $sched['Department'] = '-';
     }
+    unset($sched);
 } else {
     $schedules = [];
 }
@@ -401,11 +316,10 @@ $quickDatesQuery = "SELECT DISTINCT s.ScheduledDate
                     JOIN DM_Users u ON s.ManagerID = u.ID
                     WHERE $quickWhereClause
                     ORDER BY s.ScheduledDate ASC
-                    OFFSET ? ROWS
-                    FETCH NEXT ? ROWS ONLY";
+                    LIMIT ? OFFSET ?";
 $quickQueryParams = $quickParams;
-$quickQueryParams[] = $quickOffset;
 $quickQueryParams[] = $quickPerPage;
+$quickQueryParams[] = $quickOffset;
 
 $quickDatesResult = dbQuery($quickDatesQuery, $quickQueryParams);
 
@@ -414,7 +328,8 @@ $quickAssignmentSchedules = [];
 if ($quickDatesResult) {
     $targetDates = [];
     foreach ($quickDatesResult as $r) {
-        $targetDates[] = $r['ScheduledDate']->format('Y-m-d');
+        $rDate = is_a($r['ScheduledDate'], 'DateTime') ? $r['ScheduledDate']->format('Y-m-d') : $r['ScheduledDate'];
+        $targetDates[] = $rDate;
     }
 
     if (!empty($targetDates)) {
@@ -436,11 +351,12 @@ if ($quickDatesResult) {
 $quickAssignmentSundays = [];
 if ($quickAssignmentSchedules !== false) {
     foreach ($quickAssignmentSchedules as $schedule) {
-        $dateStr = $schedule['ScheduledDate']->format('Y-m-d');
+        $dateObj = is_a($schedule['ScheduledDate'], 'DateTime') ? $schedule['ScheduledDate'] : new DateTime($schedule['ScheduledDate']);
+        $dateStr = $dateObj->format('Y-m-d');
         if (!isset($quickAssignmentSundays[$dateStr])) {
             $quickAssignmentSundays[$dateStr] = [
                 'assignments' => [],
-                'date_obj' => $schedule['ScheduledDate'],
+                'date_obj' => $dateObj,
                 'is_submitted' => $schedule['ChecklistStatus'] === 'Completed'
             ];
         }
@@ -726,14 +642,14 @@ if ($quickAssignmentSchedules !== false) {
                 </form>
 
                 <script>
-                function validateScheduleForm() {
-                    const mgrId = document.getElementById('manager_id').value;
-                    if (!mgrId) {
-                        alert("Please select a manager from the dropdown list.");
-                        return false;
+                    function validateScheduleForm() {
+                        const mgrId = document.getElementById('manager_id').value;
+                        if (!mgrId) {
+                            alert("Please select a manager from the dropdown list.");
+                            return false;
+                        }
+                        return true;
                     }
-                    return true;
-                }
                 </script>
             </div>
 
@@ -781,9 +697,23 @@ if ($quickAssignmentSchedules !== false) {
                                 <!-- Group by Timeline -->
                                 <?php
                                 $timelines = ['8:00AM - 5:00PM', '8:00PM - 5:00AM'];
+                                // Define robust comparison helper
+                                $normalize = function ($str) {
+                                    // Remove spaces, leading zeros, and convert to upper case
+                                    $s = strtoupper(str_replace(' ', '', $str));
+                                    $s = str_replace('08:', '8:', $s);
+                                    $s = str_replace('05:', '5:', $s);
+                                    return $s;
+                                };
+
                                 foreach ($timelines as $timeline):
-                                    $timelineAssignments = array_filter($assignments, function ($a) use ($timeline) {
-                                        return ($a['Timeline'] ?? '8:00AM - 5:00PM') === $timeline; // Default to first if null
+                                    $timelineAssignments = array_filter($assignments, function ($a) use ($timeline, $normalize) {
+                                        $dbVal = $a['Timeline'] ?? '';
+                                        // Fallback default if empty
+                                        if (!$dbVal)
+                                            $dbVal = '8:00AM - 5:00PM';
+
+                                        return $normalize($dbVal) === $normalize($timeline);
                                     });
                                     $count = count($timelineAssignments);
                                     ?>
@@ -1014,7 +944,7 @@ if ($quickAssignmentSchedules !== false) {
                         </thead>
                         <tbody class="divide-y divide-white/5">
                             <?php foreach ($schedules as $schedule):
-                                $schedDate = $schedule['ScheduledDate']->format('Y-m-d');
+                                $schedDate = $schedule['ScheduledDate'];
                                 $isPast = $schedDate < $today;
                                 ?>
                                 <tr

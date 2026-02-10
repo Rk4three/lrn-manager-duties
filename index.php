@@ -1,16 +1,24 @@
 <?php
 // index.php - Dashboard for Duty Manager Checklist
 session_start();
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
 require_once 'config/db.php';
-
-// Auto-submit expired checklists (past deadline)
-require_once 'actions/auto_submit.php';
-autoSubmitExpiredChecklists();
 
 // Check if user is logged in
 if (!isset($_SESSION['dm_user_id'])) {
     header("Location: login.php");
     exit();
+}
+
+// Auto-submit expired checklists (Run only for logged-in users to avoid overhead)
+// And wrap in try-catch to prevent page crash
+try {
+    require_once 'actions/auto_submit.php';
+    autoSubmitExpiredChecklists();
+} catch (Throwable $e) {
+    error_log("Auto-submit error: " . $e->getMessage());
 }
 
 $userName = $_SESSION['dm_name'] ?? $_SESSION['full_name'] ?? 'User';
@@ -26,10 +34,10 @@ $isSundayToday = isSunday();
 
 // Calculate "Target Date" - The nearest schedule >= Today
 // If found, that is our target. If not, maybe just default to today?
-$targetDateQuery = "SELECT TOP 1 ScheduledDate FROM DM_Schedules WHERE ScheduledDate >= ? ORDER BY ScheduledDate ASC";
+$targetDateQuery = "SELECT ScheduledDate FROM DM_Schedules WHERE ScheduledDate >= ? ORDER BY ScheduledDate ASC LIMIT 1";
 $targetDateResult = dbQueryOne($targetDateQuery, [$today]);
 
-$targetDate = $targetDateResult ? $targetDateResult['ScheduledDate']->format('Y-m-d') : $today; // Default to today if no future schedule
+$targetDate = $targetDateResult ? $targetDateResult['ScheduledDate'] : $today; // Default to today if no future schedule
 
 // Check all managers assigned for this Target Date
 $currentSchedules = dbQuery("SELECT s.ID, u.Name as ManagerName, s.Timeline 
@@ -62,10 +70,11 @@ $myScheduleThisWeek = dbQueryOne(
 $isAssignedThisWeek = (bool) $myScheduleThisWeek;
 
 // Get upcoming schedules for this user
-$upcomingQuery = "SELECT TOP 5 s.ID, s.ScheduledDate
+$upcomingQuery = "SELECT s.ID, s.ScheduledDate
                   FROM DM_Schedules s
                   WHERE s.ManagerID = ? AND s.ScheduledDate >= ?
-                  ORDER BY s.ScheduledDate ASC";
+                  ORDER BY s.ScheduledDate ASC
+                  LIMIT 5";
 $upcomingSchedules = dbQuery($upcomingQuery, [$dmUserId, $today]);
 
 // Get next 8 Distinct Scheduled Dates for calendar view
@@ -73,17 +82,18 @@ $upcomingSchedules = dbQuery($upcomingQuery, [$dmUserId, $today]);
 $calendarDates = [];
 
 // Query for next 8 UNIQUE dates with schedules
-$datesQuery = "SELECT DISTINCT TOP 8 ScheduledDate
+$datesQuery = "SELECT DISTINCT ScheduledDate
                FROM DM_Schedules
                WHERE ScheduledDate >= ?
-               ORDER BY ScheduledDate ASC";
+               ORDER BY ScheduledDate ASC
+               LIMIT 8";
 $rangeSchedulesDates = dbQuery($datesQuery, [$today]);
 
 if ($rangeSchedulesDates) {
     // Collect dates to query details
     $datesList = [];
     foreach ($rangeSchedulesDates as $d) {
-        $datesList[] = $d['ScheduledDate']->format('Y-m-d');
+        $datesList[] = $d['ScheduledDate'];
     }
 
     // Fetch managers for these dates
@@ -102,7 +112,7 @@ if ($rangeSchedulesDates) {
         $schedulesByDate = [];
         if ($rangeSchedules) {
             foreach ($rangeSchedules as $rs) {
-                $d = $rs['ScheduledDate']->format('Y-m-d');
+                $d = (new DateTime($rs['ScheduledDate']))->format('Y-m-d');
                 if (!isset($schedulesByDate[$d])) {
                     $schedulesByDate[$d] = [];
                 }
@@ -111,10 +121,10 @@ if ($rangeSchedulesDates) {
         }
 
         foreach ($rangeSchedulesDates as $dateRecord) {
-            $dateStr = $dateRecord['ScheduledDate']->format('Y-m-d');
+            $dateStr = $dateRecord['ScheduledDate'];
             $calendarDates[] = [
                 'date' => $dateStr,
-                'dateObj' => $dateRecord['ScheduledDate'],
+                'dateObj' => new DateTime($dateRecord['ScheduledDate']),
                 'managers' => $schedulesByDate[$dateStr] ?? [],
                 'isTarget' => ($dateStr === $targetDate),
                 'isToday' => ($dateStr === $today)
@@ -467,7 +477,7 @@ if ($targetDate) {
                 <?php if ($upcomingSchedules && count($upcomingSchedules) > 0): ?>
                     <div class="space-y-3">
                         <?php foreach ($upcomingSchedules as $schedule):
-                            $schedDate = new DateTime($schedule['ScheduledDate']->format('Y-m-d'));
+                            $schedDate = new DateTime($schedule['ScheduledDate']);
                             $isThisWeek = $schedDate->format('Y-m-d') === $targetDate;
                             ?>
                             <a href="checklist.php?date=<?= $schedDate->format('Y-m-d') ?>" class="flex items-center gap-4 p-4 rounded-xl border transition-all hover:bg-slate-800/50

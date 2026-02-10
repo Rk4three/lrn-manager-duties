@@ -1,0 +1,35 @@
+version: "3.8"
+
+services:
+  app:
+    build: .
+    ports:
+      - "8080:80"
+    environment:
+      - ERROR_LOGGING=E_ALL
+      - DISPLAY_ERRORS=On
+      - DB_HOST=db
+      - DB_NAME=manager_duties
+      - DB_USER=postgres
+      - DB_PASS=password
+      - DB_PORT=5432
+    depends_on:
+      - db
+    # volumes:
+    #   - ./uploads:/var/www/html/uploads
+    # Note: Uploads will be stored in container and lost on rebuild
+
+  db:
+    build: ./database
+    restart: always
+    environment:
+      POSTGRES_DB: manager_duties
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+volumes:
+  db_data:

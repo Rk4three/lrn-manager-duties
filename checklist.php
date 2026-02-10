@@ -54,15 +54,15 @@ if ($requestedDate && preg_match('/^\d{4}-\d{2}-\d{2}$/', $requestedDate)) {
     // Try to find the appropriate schedule
     if ($isSuperAdmin) {
         // Super Admin: Find ANY next schedule
-        $nextSched = dbQueryOne("SELECT TOP 1 ScheduledDate FROM DM_Schedules WHERE ScheduledDate >= ? ORDER BY ScheduledDate ASC", [$today]);
+        $nextSched = dbQueryOne("SELECT ScheduledDate FROM DM_Schedules WHERE ScheduledDate >= ? ORDER BY ScheduledDate ASC LIMIT 1", [$today]);
         if ($nextSched) {
-            $targetDate = $nextSched['ScheduledDate']->format('Y-m-d');
+            $targetDate = $nextSched['ScheduledDate'];
         }
     } else {
         // Regular User: Find THEIR next schedule
-        $myNextSched = dbQueryOne("SELECT TOP 1 ScheduledDate FROM DM_Schedules WHERE ManagerID = ? AND ScheduledDate >= ? ORDER BY ScheduledDate ASC", [$dmUserId, $today]);
+        $myNextSched = dbQueryOne("SELECT ScheduledDate FROM DM_Schedules WHERE ManagerID = ? AND ScheduledDate >= ? ORDER BY ScheduledDate ASC LIMIT 1", [$dmUserId, $today]);
         if ($myNextSched) {
-             $targetDate = $myNextSched['ScheduledDate']->format('Y-m-d');
+             $targetDate = $myNextSched['ScheduledDate'];
         } else {
             // If they have no personal schedule, check if there is a general session active today that they might need to see (unlikely but safe fallback) or just fallback to today.
              $targetDate = $today;
@@ -153,20 +153,21 @@ if ($selectedSchedule) {
     // --- Validation Logic (Pending/Future) ---
     if ($canEdit && !$isSuperAdmin) {
         // 1. Check Previous Pending
-        $pendingQuery = "SELECT TOP 1 s.ScheduledDate 
+        $pendingQuery = "SELECT s.ScheduledDate 
                          FROM DM_Schedules s
                          LEFT JOIN DM_Checklist_Sessions cs ON s.ID = cs.ScheduleID
                          WHERE s.ManagerID = ? 
                            AND s.ScheduledDate < ? 
                            AND (cs.Status IS NULL OR cs.Status != 'Completed')
-                         ORDER BY s.ScheduledDate ASC";
+                         ORDER BY s.ScheduledDate ASC
+                         LIMIT 1";
         $pendingResult = dbQueryOne($pendingQuery, [$selectedSchedule['ManagerID'], $targetDate]);
         
         if ($pendingResult) {
             $canEdit = false;
             $editBlockReason = "pending_previous";
-            $blockDetail = $pendingResult['ScheduledDate']->format('M j, Y');
-            $blockDetailRaw = $pendingResult['ScheduledDate']->format('Y-m-d');
+            $blockDetail = (new DateTime($pendingResult['ScheduledDate']))->format('M j, Y');
+            $blockDetailRaw = $pendingResult['ScheduledDate'];
         }
         
         // 2. Future Date Check
@@ -190,8 +191,8 @@ if (isset($allDateSchedules)) {
 }
 
 // Get all checklist items
-$itemsQuery = "SELECT ID, Area, TaskName, SortOrder, AC_Status, RequiresTemperature FROM DM_Checklist_Items 
-               WHERE IsActive = 1 ORDER BY SortOrder ASC";
+$itemsQuery = "SELECT \"ID\", \"Area\", \"TaskName\", \"SortOrder\", \"AC_Status\", \"RequiresTemperature\" FROM \"DM_Checklist_Items\" 
+               WHERE \"IsActive\" = TRUE ORDER BY \"SortOrder\" ASC";
 $allItems = dbQuery($itemsQuery, []);
 
 // Get existing entries for this session
@@ -301,7 +302,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         
         if ($existingEntry) {
             $updateSql = "UPDATE DM_Checklist_Entries 
-                          SET Shift_Selection = ?, Coordinated = ?, Dept_In_Charge = ?, Remarks = ?, Temperature = ?, UpdatedAt = GETDATE()
+                          SET Shift_Selection = ?, Coordinated = ?, Dept_In_Charge = ?, Remarks = ?, Temperature = ?, UpdatedAt = CURRENT_TIMESTAMP
                           WHERE SessionID = ? AND ItemID = ?";
             dbExecute($updateSql, [$shift, $coordinated, $deptInCharge, $remarks, $temperature, $sessionId, $itemId]);
         } else {
@@ -385,24 +386,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             // Let's generate a temporary unique name, or just insert and update.
             // Inserting first allows us to use the ID in the filename which is cleaner.
             
+            // 2. Insert record into DB first to get ID (needed for filename)
+            // We use RETURNING ID for PostgreSQL (unquoted to allow case insensitivity matching if column is lowercase)
             $sql = "INSERT INTO DM_Checklist_Photos (SessionID, ItemID, MimeType) 
-                    OUTPUT INSERTED.ID 
-                    VALUES (?, ?, ?);";
+                    VALUES (?, ?, ?)
+                    RETURNING ID";
             
-            $params = [$sessionId, $itemId, $mimeType];
-            $stmt = sqlsrv_query($conn, $sql, $params);
+            // dbQueryOne should fetch the row
+            $insertedRow = dbQueryOne($sql, [$sessionId, $itemId, $mimeType]);
             
-            if ($stmt === false) {
+            if ($insertedRow === false) {
                  if ($fp) fclose($fp);
-                 sendJsonResponse(['success' => false, 'error' => 'Database save failed', 'sqlErrors' => sqlsrv_errors()]);
+                 sendJsonResponse(['success' => false, 'error' => 'Database save failed']);
             }
             
-            $newPhotoId = 0;
-            if (sqlsrv_fetch($stmt)) {
-                 $newPhotoId = sqlsrv_get_field($stmt, 0);
-            }
-            
-            if ($stmt) sqlsrv_free_stmt($stmt);
+            // Handle potentially different case from PDO driver
+            $newPhotoId = $insertedRow['ID'] ?? $insertedRow['id'] ?? 0;
+            // No statement freeing needed for PDO wrapper
             
             if ($newPhotoId > 0) {
                  // 3. Save file to disk
@@ -480,8 +480,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     }
     
     if ($_POST['action'] === 'finalize') {
-        $result = dbExecute("UPDATE DM_Checklist_Sessions SET Status = 'Completed', SubmittedAt = GETDATE() WHERE ID = ?",
+        error_log("FINALIZE: SessionID=$sessionId, canEdit=" . ($canEdit ? 'true' : 'false'));
+        $result = dbExecute("UPDATE DM_Checklist_Sessions SET Status = 'Completed', SubmittedAt = CURRENT_TIMESTAMP WHERE ID = ?",
                   [$sessionId]);
+        error_log("FINALIZE: Update result=" . ($result ? 'true' : 'false'));
         if ($result) {
             sendJsonResponse(['success' => true, 'sessionId' => $sessionId]);
         } else {

@@ -2,49 +2,31 @@
 /**
  * Database Connection Helper
  * Duty Manager Checklist Application
+ * Refactored for PostgreSQL (PDO)
  */
 
 // Connection Configuration
-// Connection Configuration
-$serverName = getenv('DB_SERVER');
-$connectionOptions = [
-    "UID" => getenv('DB_USER'),
-    "PWD" => getenv('DB_PASS'),
-    "Database" => getenv('DB_NAME'),
-    "CharacterSet" => "UTF-8",
-    "LoginTimeout" => 30
+$host = getenv('DB_HOST') ?: 'db'; // Default to 'db' service in Docker
+$db = getenv('DB_NAME') ?: 'manager_duties';
+$user = getenv('DB_USER') ?: 'postgres';
+$pass = getenv('DB_PASS') ?: 'password';
+$port = getenv('DB_PORT') ?: '5432';
+
+$dsn = "pgsql:host=$host;port=$port;dbname=$db";
+$options = [
+    PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+    PDO::ATTR_EMULATE_PREPARES => false,
 ];
 
-// Create connection
-$conn = sqlsrv_connect($serverName, $connectionOptions);
-
-// Check connection
-if ($conn === false) {
-    $dbError = true;
-    $dbErrorMessage = print_r(sqlsrv_errors(), true);
-} else {
+try {
+    $pdo = new PDO($dsn, $user, $pass, $options);
     $dbError = false;
     $dbErrorMessage = null;
-}
-
-// Data Connection (SA) for Cross-Database Access (LRNPH, LRNPH_E)
-// Data Connection (SA) for Cross-Database Access (LRNPH, LRNPH_E)
-// ERROR FIX: Azure Migration - Use same connection details as main DB for now
-// The mock tables (lrn_master_list, lrnph_users) are in the SAME database on Azure.
-$serverNameData = getenv('DB_SERVER');
-$connectionOptionsData = [
-    "UID" => getenv('DB_USER'),
-    "PWD" => getenv('DB_PASS'),
-    "Database" => getenv('DB_NAME'),
-    "CharacterSet" => "UTF-8",
-    "LoginTimeout" => 30
-];
-
-$connData = sqlsrv_connect($serverNameData, $connectionOptionsData);
-
-if ($connData === false) {
-    // Fallback or log error? For now just log, preventing immediate death if not needed immediately
-    error_log("Data Connection (SA) failed: " . print_r(sqlsrv_errors(), true));
+} catch (\PDOException $e) {
+    $dbError = true;
+    $dbErrorMessage = $e->getMessage();
+    $pdo = null;
 }
 
 /**
@@ -55,21 +37,21 @@ if ($connData === false) {
  */
 function dbQuery($sql, $params = [])
 {
-    global $conn;
+    global $pdo;
+    if (!$pdo)
+        return false;
 
-    $stmt = sqlsrv_query($conn, $sql, $params);
+    // Convert SQL Server syntax to PostgreSQL if needed
+    $sql = convertSqlSyntax($sql);
 
-    if ($stmt === false) {
+    try {
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+        return $stmt->fetchAll();
+    } catch (PDOException $e) {
+        error_log("Query Error: " . $e->getMessage() . " SQL: " . $sql);
         return false;
     }
-
-    $results = [];
-    while ($row = sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC)) {
-        $results[] = $row;
-    }
-
-    sqlsrv_free_stmt($stmt);
-    return $results;
 }
 
 /**
@@ -80,18 +62,24 @@ function dbQuery($sql, $params = [])
  */
 function dbQueryOne($sql, $params = [])
 {
-    global $conn;
+    global $pdo;
+    if (!$pdo)
+        return null;
 
-    $stmt = sqlsrv_query($conn, $sql, $params);
+    $sql = convertSqlSyntax($sql);
 
-    if ($stmt === false) {
+    // SQL Server TOP 1 -> PostgreSQL LIMIT 1
+    // (Handled in convertSqlSyntax or manually here if needed, but fetch() gets one anyway)
+
+    try {
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+        $result = $stmt->fetch();
+        return $result ?: null;
+    } catch (PDOException $e) {
+        error_log("QueryOne Error: " . $e->getMessage());
         return null;
     }
-
-    $row = sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC);
-    sqlsrv_free_stmt($stmt);
-
-    return $row;
 }
 
 /**
@@ -102,16 +90,19 @@ function dbQueryOne($sql, $params = [])
  */
 function dbExecute($sql, $params = [])
 {
-    global $conn;
+    global $pdo;
+    if (!$pdo)
+        return false;
 
-    $stmt = sqlsrv_query($conn, $sql, $params);
+    $sql = convertSqlSyntax($sql);
 
-    if ($stmt === false) {
+    try {
+        $stmt = $pdo->prepare($sql);
+        return $stmt->execute($params);
+    } catch (PDOException $e) {
+        error_log("Execute Error: " . $e->getMessage());
         return false;
     }
-
-    sqlsrv_free_stmt($stmt);
-    return true;
 }
 
 /**
@@ -120,19 +111,100 @@ function dbExecute($sql, $params = [])
  */
 function dbLastInsertId()
 {
-    global $conn;
-
-    $sql = "SELECT SCOPE_IDENTITY() AS ID";
-    $stmt = sqlsrv_query($conn, $sql);
-
-    if ($stmt === false) {
+    global $pdo;
+    if (!$pdo)
         return null;
+    return (int) $pdo->lastInsertId();
+}
+
+/**
+ * Helper to convert common T-SQL syntax to PgSQL
+ * This is a basic converter; complex queries might need manual adjustment.
+ */
+function convertSqlSyntax($sql)
+{
+    // Replace TOP n with LIMIT n (Basic implementation)
+    if (preg_match('/SELECT\s+TOP\s+(\d+)\s+(.+)/i', $sql, $matches)) {
+        $limit = $matches[1];
+        $rest = $matches[2];
+        $sql = "SELECT $rest LIMIT $limit";
     }
 
-    $row = sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC);
-    sqlsrv_free_stmt($stmt);
+    // Replace GETDATE() with CURRENT_TIMESTAMP
+    $sql = str_ireplace('GETDATE()', 'CURRENT_TIMESTAMP', $sql);
 
-    return $row ? (int) $row['ID'] : null;
+    // Replace ISNULL() with COALESCE()
+    $sql = str_ireplace('ISNULL(', 'COALESCE(', $sql);
+
+    // Remove brackets [] used in T-SQL
+    $sql = str_replace(['[', ']'], '"', $sql);
+
+    // Auto-quote known mixed-case table names (if not already quoted)
+    $tables = [
+        'DM_Users',
+        'DM_Schedules',
+        'DM_Checklist_Items',
+        'DM_Checklist_Sessions',
+        'DM_Checklist_Entries',
+        'DM_Checklist_Photos',
+        'Manager_Calendar'
+    ];
+    foreach ($tables as $table) {
+        // Match table name NOT already inside quotes
+        $sql = preg_replace('/(?<!")\\b' . preg_quote($table, '/') . '\\b(?!")/', '"' . $table . '"', $sql);
+    }
+
+    // Auto-quote known mixed-case column names (if not already quoted)
+    $columns = [
+        'ID',
+        'Name',
+        'Username',
+        'Password',
+        'EmployeeID',
+        'Department',
+        'PhotoURL',
+        'Role',
+        'IsActive',
+        'IsSuperAdmin',
+        'CreatedAt',
+        'ManagerID',
+        'ScheduledDate',
+        'Timeline',
+        'Area',
+        'TaskName',
+        'SortOrder',
+        'AC_Status',
+        'RequiresTemperature',
+        'ScheduleID',
+        'SessionDate',
+        'Status',
+        'SubmittedAt',
+        'SessionID',
+        'ItemID',
+        'Shift_Selection',
+        'Coordinated',
+        'Dept_In_Charge',
+        'Remarks',
+        'Temperature',
+        'UpdatedAt',
+        'FilePath',
+        'MimeType',
+        'UploadedAt',
+        'ManagerName',
+        'EntryDate',
+        'EntryType',
+        'StartTime',
+        'EndTime',
+        'LeaveNote'
+    ];
+    foreach ($columns as $col) {
+        // Match column name NOT already inside quotes, using word boundary
+        // We allow dot (.) to precede so that aliases like u.Name become u."Name"
+        // But we still block if preceded by " or word char (to avoid partial matches like 'MyName')
+        $sql = preg_replace('/(?<!["\w])\b' . preg_quote($col, '/') . '\b(?!")/', '"' . $col . '"', $sql);
+    }
+
+    return $sql;
 }
 
 /**
@@ -173,4 +245,3 @@ function getCurrentSundayDate()
     $now->modify('-' . $dayOfWeek . ' days');
     return $now->format('Y-m-d');
 }
-

@@ -75,9 +75,12 @@ foreach ($entries as $entry) {
     // The driver might return DateTime object or string depending on configuration
     // dbQuery helper suggests it returns array of associative arrays
     // Check if EntryDate is an object
-    $dateKey = ($entry['EntryDate'] instanceof DateTime)
-        ? $entry['EntryDate']->format('Y-m-d')
-        : $entry['EntryDate'];
+    if ($entry['EntryDate'] instanceof DateTime) {
+        $dateKey = $entry['EntryDate']->format('Y-m-d');
+    } else {
+        // Ensure strictly Y-m-d (first 10 chars)
+        $dateKey = substr($entry['EntryDate'], 0, 10);
+    }
 
     // Initialize date array if not exists
     if (!isset($entriesByDate[$dateKey])) {

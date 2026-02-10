@@ -1,0 +1,88 @@
+<div id="day-detail-modal" class="fixed inset-0 z-[60] hidden items-center justify-center bg-black/80 backdrop-blur-sm transition-all duration-300">
+    <div class="glass-card w-full max-w-5xl rounded-2xl p-0 shadow-2xl scale-95 transition-all duration-300 transform max-h-[90vh] flex flex-col bg-[#111928]/95 border border-white/10">
+        
+        <!-- Header -->
+        <div class="flex items-center justify-between p-6 border-b border-white/5 shrink-0">
+            <div>
+                <h2 id="day-modal-title" class="text-xl font-bold text-white tracking-tight">Day Details</h2>
+                <div class="flex items-center gap-2 mt-1">
+                    <span id="day-modal-count" class="px-2 py-0.5 rounded text-xs font-semibold bg-brand-500/10 text-brand-300 border border-brand-500/20">0 managers</span>
+                </div>
+            </div>
+            <button onclick="closeDayDetailModal()" class="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-colors flex items-center justify-center">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        
+        <!-- Controls -->
+        <div class="p-4 border-b border-white/5 flex flex-col sm:flex-row gap-4 justify-between items-center bg-slate-900/30 shrink-0">
+             <div class="relative w-full sm:w-72">
+                <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm"></i>
+                <input type="text" id="manager-search" oninput="filterManagers()" placeholder="Search manager or department..." 
+                    class="w-full bg-slate-900/50 border border-slate-700 rounded-xl pl-9 pr-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all">
+            </div>
+            <div class="flex gap-2 w-full sm:w-auto">
+                 <button id="add-my-schedule-btn" class="flex-1 sm:flex-none px-4 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-500 text-white text-sm font-semibold shadow-lg shadow-brand-500/20 hover:shadow-brand-500/40 transition-all flex items-center justify-center gap-2">
+                    <i class="fas fa-plus"></i> Add My Schedule
+                </button>
+                <button id="assign-manager-btn" class="hidden flex-1 sm:flex-none px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/40 transition-all flex items-center justify-center gap-2">
+                    <i class="fas fa-user-plus"></i> Assign Manager
+                </button>
+            </div>
+        </div>
+
+        <!-- Content -->
+        <div class="flex-1 overflow-y-auto custom-scrollbar p-0 relative min-h-[300px]">
+             <!-- No Managers Message -->
+            <div id="no-managers-msg" class="hidden absolute inset-0 flex flex-col items-center justify-center text-slate-500">
+                <div class="w-16 h-16 rounded-2xl bg-slate-800/50 flex items-center justify-center mb-4">
+                    <i class="fas fa-users-slash text-3xl opacity-50"></i>
+                </div>
+                <h3 class="text-lg font-medium text-slate-400">No Action Required</h3>
+                <p class="text-sm">No managers are scheduled for this day yet.</p>
+            </div>
+
+            <!-- Table -->
+            <div class="min-w-full">
+                <table class="w-full text-left text-sm">
+                    <thead class="bg-slate-900/80 text-xs uppercase text-slate-400 font-semibold border-b border-white/5 sticky top-0 backdrop-blur z-10">
+                        <tr>
+                            <th class="py-3 px-4 w-16"></th> <!-- Photo -->
+                            <th class="py-3 px-4 cursor-pointer hover:text-brand-400 transition-colors group" onclick="sortTable('name')">
+                                Name <i class="fas fa-sort ml-1 opacity-50 group-hover:opacity-100 transition-opacity"></i>
+                            </th>
+                            <th class="py-3 px-4 cursor-pointer hover:text-brand-400 transition-colors group" onclick="sortTable('dept')">
+                                Department <i class="fas fa-sort ml-1 opacity-50 group-hover:opacity-100 transition-opacity"></i>
+                            </th>
+                            <th class="py-3 px-4 font-mono">Employee ID</th>
+                            <th class="py-3 px-4">Schedule / Note</th>
+                            <th class="py-3 px-4">Created At</th>
+                             <th id="action-header" class="py-3 px-4 text-center hidden w-16">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="managers-table-body" class="divide-y divide-white/5">
+                        <!-- Rows populated by JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+            
+        <!-- Pagination -->
+         <div id="pagination-controls" class="hidden shrink-0 flex items-center justify-between p-4 border-t border-white/5 bg-slate-900/30">
+            <div class="text-xs text-slate-400">
+                Showing <span id="showing-range" class="font-medium text-white">0-0</span> of <span id="total-managers" class="font-medium text-white">0</span> matches
+            </div>
+            <div class="flex items-center gap-2">
+                <button id="prev-page-btn" onclick="changePage(-1)" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed text-slate-300 transition-colors flex items-center justify-center border border-white/5">
+                    <i class="fas fa-chevron-left"></i>
+                </button>
+                <div class="px-3 py-1 rounded-lg bg-slate-800/50 border border-white/5 text-xs text-slate-400">
+                    Page <span id="current-page" class="font-medium text-white">1</span> of <span id="total-pages" class="font-medium text-white">1</span>
+                </div>
+                <button id="next-page-btn" onclick="changePage(1)" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed text-slate-300 transition-colors flex items-center justify-center border border-white/5">
+                    <i class="fas fa-chevron-right"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>

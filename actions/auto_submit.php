@@ -44,7 +44,7 @@ function autoSubmitExpiredChecklists()
             $result = dbExecute(
                 "UPDATE DM_Checklist_Sessions 
                  SET Status = 'Completed', 
-                     SubmittedAt = GETDATE() 
+                     SubmittedAt = CURRENT_TIMESTAMP 
                  WHERE ID = ?",
                 [$session['SessionID']]
             );
@@ -76,7 +76,7 @@ function autoSubmitExpiredChecklists()
 
         foreach ($schedulesWithoutSession as $schedule) {
             $scheduleId = $schedule['ScheduleID'];
-            $scheduledDate = $schedule['ScheduledDate']->format('Y-m-d');
+            $scheduledDate = $schedule['ScheduledDate'];
 
             // Check if ANY session exists for this DATE across ANY schedule
             // This prevents duplicate sessions when multiple managers are on the same day
@@ -106,7 +106,7 @@ function autoSubmitExpiredChecklists()
             // Create a completed session for this schedule
             $createResult = dbExecute(
                 "INSERT INTO DM_Checklist_Sessions (ScheduleID, SessionDate, Status, SubmittedAt) 
-                 VALUES (?, ?, 'Completed', GETDATE())",
+                 VALUES (?, ?, 'Completed', CURRENT_TIMESTAMP)",
                 [$scheduleId, $scheduledDate]
             );
 

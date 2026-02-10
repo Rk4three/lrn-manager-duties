@@ -30,7 +30,7 @@ $filterYear = $_GET['year'] ?? date('Y');
 $sessionsQuery = "SELECT cs.ID as SessionID, cs.SessionDate, cs.Status, cs.SubmittedAt,
                          s.ID as ScheduleID, u.ID as ManagerID, u.Name as ManagerName,
                          (
-                             SELECT STRING_AGG(u2.Name, ' & ') WITHIN GROUP (ORDER BY u2.Name)
+                             SELECT STRING_AGG(u2.Name, ' & ' ORDER BY u2.Name)
                              FROM DM_Schedules s2
                              JOIN DM_Users u2 ON s2.ManagerID = u2.ID
                              WHERE s2.ScheduledDate = s.ScheduledDate
@@ -57,12 +57,12 @@ if ($filterManager) {
 }
 
 if ($filterMonth) {
-    $sessionsQuery .= " AND MONTH(cs.SessionDate) = ?";
+    $sessionsQuery .= " AND EXTRACT(MONTH FROM cs.SessionDate) = ?";
     $params[] = (int) $filterMonth;
 }
 
 if ($filterYear) {
-    $sessionsQuery .= " AND YEAR(cs.SessionDate) = ?";
+    $sessionsQuery .= " AND EXTRACT(YEAR FROM cs.SessionDate) = ?";
     $params[] = (int) $filterYear;
 }
 
@@ -71,10 +71,10 @@ $sessions = dbQuery($sessionsQuery, $params);
 
 // Get managers for filter (super admin only)
 $managers = [];
-$managers = dbQuery("SELECT u.ID, u.Name 
-                     FROM DM_Users u
-                     WHERE u.IsActive = 1 
-                     ORDER BY u.Name", []);
+$managers = dbQuery("SELECT u.\"ID\", u.\"Name\" 
+                     FROM \"DM_Users\" u
+                     WHERE u.\"IsActive\" = TRUE 
+                     ORDER BY u.\"Name\"", []);
 
 // Handle PDF export (Existing logic preserved with minor cleanup)
 if (isset($_GET['export']) && isset($_GET['session_id'])) {
@@ -82,7 +82,7 @@ if (isset($_GET['export']) && isset($_GET['session_id'])) {
 
     $sessionData = dbQueryOne("SELECT cs.ID, cs.SessionDate, cs.SubmittedAt, u.Name as SubmittedBy,
                                       (
-                                          SELECT STRING_AGG(u2.Name, ' & ') WITHIN GROUP (ORDER BY u2.Name)
+                                          SELECT STRING_AGG(u2.Name, ' & ' ORDER BY u2.Name)
                                           FROM DM_Schedules s2
                                           JOIN DM_Users u2 ON s2.ManagerID = u2.ID
                                           WHERE s2.ScheduledDate = s.ScheduledDate
@@ -106,8 +106,8 @@ if (isset($_GET['export']) && isset($_GET['session_id'])) {
     }
 
     if ($sessionData) {
-        $sessionDate = $sessionData['SessionDate']->format('F j, Y');
-        $submittedAt = $sessionData['SubmittedAt'] ? $sessionData['SubmittedAt']->format('F j, Y g:i A') : 'N/A';
+        $sessionDate = (new DateTime($sessionData['SessionDate']))->format('F j, Y');
+        $submittedAt = $sessionData['SubmittedAt'] ? (new DateTime($sessionData['SubmittedAt']))->format('F j, Y g:i A') : 'N/A';
         $submittedBy = $sessionData['SubmittedBy'];
         $assignedManagers = $sessionData['AllManagers'];
 
@@ -478,7 +478,7 @@ if (isset($_GET['view'])) {
     $viewSessionId = (int) $_GET['view'];
     $viewSession = dbQueryOne("SELECT cs.ID, cs.SessionDate, cs.SubmittedAt, u.Name as ManagerName,
                                       (
-                                          SELECT STRING_AGG(u2.Name, ' & ') WITHIN GROUP (ORDER BY u2.Name)
+                                          SELECT STRING_AGG(u2.Name, ' & ' ORDER BY u2.Name)
                                           FROM DM_Schedules s2
                                           JOIN DM_Users u2 ON s2.ManagerID = u2.ID
                                           WHERE s2.ScheduledDate = s.ScheduledDate
@@ -625,7 +625,7 @@ if (isset($_GET['view'])) {
                             <i class="fas fa-check-circle"></i> Completed
                         </div>
                         <h2 class="text-3xl font-bold text-white mb-2">
-                            <?= (new DateTime($viewSession['SessionDate']->format('Y-m-d')))->format('F j, Y') ?>
+                            <?= (new DateTime($viewSession['SessionDate']))->format('F j, Y') ?>
                         </h2>
                         <div class="flex items-center gap-2 text-slate-400 text-sm">
                             <i class="fas fa-user-tie text-slate-500"></i>
@@ -633,7 +633,7 @@ if (isset($_GET['view'])) {
                             <span class="text-slate-600">•</span>
                             <i class="far fa-clock text-slate-500"></i>
                             <span>Submitted:
-                                <?= $viewSession['SubmittedAt'] ? $viewSession['SubmittedAt']->format('M j, g:i A') : 'N/A' ?></span>
+                                <?= $viewSession['SubmittedAt'] ? (new DateTime($viewSession['SubmittedAt']))->format('M j, g:i A') : 'N/A' ?></span>
                         </div>
                     </div>
 
@@ -942,7 +942,7 @@ if (isset($_GET['view'])) {
                 <?php if ($sessions && count($sessions) > 0): ?>
                     <div class="grid gap-4">
                         <?php foreach ($sessions as $session):
-                            $sessionDate = new DateTime($session['SessionDate']->format('Y-m-d'));
+                            $sessionDate = new DateTime($session['SessionDate']);
                             ?>
                             <div
                                 class="glass-card p-5 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4 group hover:border-brand-500/30 transition-all duration-300">
@@ -969,7 +969,8 @@ if (isset($_GET['view'])) {
                                         <?php if ($session['SubmittedAt']): ?>
                                             <div class="text-xs text-slate-500 mt-1 flex items-center gap-2">
                                                 <i class="fas fa-clock"></i>
-                                                <span>Submitted <?= $session['SubmittedAt']->format('M j, g:i A') ?></span>
+                                                <span>Submitted
+                                                    <?= (new DateTime($session['SubmittedAt']))->format('M j, g:i A') ?></span>
                                             </div>
                                         <?php endif; ?>
                                     </div>

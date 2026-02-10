@@ -83,30 +83,17 @@ $managersInfo = [];
 if ($isSuperAdmin) {
     // If multiple managers, fetch their details from DM_Users
     $idsStr = implode(',', array_map('intval', $targetManagerIDs));
-    $users = dbQuery("SELECT ID, Name FROM DM_Users WHERE ID IN ($idsStr)");
+    $users = dbQuery("SELECT ID, Name, EmployeeID, Department FROM DM_Users WHERE ID IN ($idsStr)");
 
     // Map ID to Info
     if ($users) {
         foreach ($users as $u) {
             $managersInfo[$u['ID']] = [
                 'Name' => $u['Name'],
-                'EmployeeID' => null, // To be filled
-                'Department' => 'N/A' // To be filled
+                'EmployeeID' => $u['EmployeeID'],
+                'Department' => $u['Department'] ?? 'N/A'
             ];
         }
-    }
-
-    // Now fill extended info from Master List
-    if ($connML) {
-        foreach ($managersInfo as $mid => &$info) {
-            $sanitizedName = str_replace("'", "''", $info['Name']);
-            $stmt = sqlsrv_query($connML, "SELECT EmployeeID, Department FROM lrn_master_list WHERE FirstName + ' ' + LastName = '$sanitizedName'");
-            if ($stmt && $row = sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC)) {
-                $info['EmployeeID'] = $row['EmployeeID'];
-                $info['Department'] = $row['Department'];
-            }
-        }
-        unset($info);
     }
 } else {
     // Self
@@ -138,7 +125,7 @@ foreach ($targetManagerIDs as $targetID) {
         if ($existing) {
             // Update
             $sql = "UPDATE Manager_Calendar 
-                    SET EntryType = ?, StartTime = ?, EndTime = ?, LeaveNote = ?, UpdatedAt = GETDATE()
+                    SET EntryType = ?, StartTime = ?, EndTime = ?, LeaveNote = ?, UpdatedAt = CURRENT_TIMESTAMP
                     WHERE ID = ?";
             $res = dbExecute($sql, [$entryType, $startTime, $endTime, $leaveNote, $existing['ID']]);
         } else {

@@ -17,42 +17,10 @@ $isSuperAdmin = $_SESSION['is_super_admin'] ?? false;
 // If Super Admin, fetch all managers for the dropdown
 $managers = [];
 if ($isSuperAdmin) {
-    $mgrQuery = "SELECT ID, Name FROM DM_Users WHERE IsActive = 1 ORDER BY Name ASC";
+    $mgrQuery = "SELECT \"ID\", \"Name\", \"Department\" FROM \"DM_Users\" WHERE \"IsActive\" = TRUE ORDER BY \"Name\" ASC";
     $managers = dbQuery($mgrQuery, []);
     if ($managers === false) {
         $managers = [];
-    } else {
-        // Fetch Departments from Master List
-        $managerNames = array_map(function ($m) {
-            return $m['Name'];
-        }, $managers);
-        if (!empty($managerNames)) {
-            $cleanNames = array_map(function ($n) {
-                return str_replace("'", "''", $n);
-            }, $managerNames);
-            $nameListStr = "'" . implode("', '", $cleanNames) . "'";
-
-            $departments = [];
-            $deptQuery = "SELECT FirstName + ' ' + LastName as FullName, Department 
-                          FROM lrn_master_list 
-                          WHERE (FirstName + ' ' + LastName) IN ($nameListStr)";
-
-            // Use connData for cross-db access
-            if (isset($connData) && $connData) {
-                $stmtDept = sqlsrv_query($connData, $deptQuery);
-                if ($stmtDept) {
-                    while ($row = sqlsrv_fetch_array($stmtDept, SQLSRV_FETCH_ASSOC)) {
-                        $departments[$row['FullName']] = $row['Department'];
-                    }
-                }
-            }
-
-            // Merge
-            foreach ($managers as &$mgr) {
-                $mgr['Department'] = $departments[$mgr['Name']] ?? 'N/A';
-            }
-            unset($mgr);
-        }
     }
 }
 
@@ -106,7 +74,7 @@ $entries = dbQuery(
 $entriesByDate = [];
 if ($entries) {
     foreach ($entries as $entry) {
-        $date = $entry['EntryDate']->format('Y-m-d');
+        $date = $entry['EntryDate'];
         $entriesByDate[$date] = $entry;
     }
 }

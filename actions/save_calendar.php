@@ -23,7 +23,7 @@ if (isset($_POST['manager_id']) && !empty($_POST['manager_id'])) {
         $targetManagerID = $_POST['manager_id'];
 
         // Fetch target manager details to ensure name is correct
-        $targetUser = dbQueryOne("SELECT Name, Role FROM DM_Users WHERE ID = ?", [$targetManagerID]);
+        $targetUser = dbQueryOne("SELECT \"Name\", \"Role\" FROM \"DM_Users\" WHERE \"ID\" = ?", [$targetManagerID]);
         if ($targetUser) {
             $managerID = $targetManagerID;
             $managerName = $targetUser['Name'];
@@ -96,22 +96,19 @@ if (isset($targetUser)) {
     // Or if we can't search master list here easily (connData availability), we default to what we have or null.
     // However, DB connection to master list is usually available via $connData if we include db.php which we did.
 
-    // We need to match Name to Master List to get accurate EmployeeID/Department if possible
-    // DM_Users usually stores Name. 
-    $sanitizedName = str_replace("'", "''", $managerName);
-    $mlSql = "SELECT EmployeeID, Department FROM lrn_master_list WHERE FirstName + ' ' + LastName = '$sanitizedName'";
-    $mlInfo = dbQueryOne($mlSql); // This relies on global $connData if dbQueryOne uses correct conn? 
-    // Wait, dbQueryOne uses $conn (Application DB). Master List is $connData.
-    // We should use sqlsrv_query with $connData directly.
+    // We need to match Name to DM_Users to get accurate EmployeeID/Department
+    // Assuming DM_Users has these columns now
+    // Note: lrn_master_list logic removed as we don't have that connection anymore.
+    // relying on DM_Users.
+    $rowUser = dbQueryOne("SELECT \"EmployeeID\", \"Department\" FROM \"DM_Users\" WHERE \"Name\" = ?", [$managerName]);
 
-    $stmtML = sqlsrv_query($connData, "SELECT EmployeeID, Department FROM lrn_master_list WHERE FirstName + ' ' + LastName = ?", array($managerName));
-    if ($stmtML && $rowML = sqlsrv_fetch_array($stmtML, SQLSRV_FETCH_ASSOC)) {
-        $employeeID = $rowML['EmployeeID'];
-        $department = $rowML['Department'];
+    if ($rowUser) {
+        $employeeID = $rowUser['EmployeeID'];
+        $department = $rowUser['Department'];
     } else {
-        // Fallback: Use what we have in cache or empty
+        // Fallback
         $employeeID = null;
-        $department = $targetUser['Department'] ?? 'N/A';
+        $department = 'N/A';
     }
 }
 
@@ -138,7 +135,7 @@ if ($entryID) {
                 StartTime = ?, 
                 EndTime = ?, 
                 LeaveNote = ?, 
-                UpdatedAt = GETDATE()
+                UpdatedAt = CURRENT_TIMESTAMP
             WHERE ID = ?";
 
     $result = dbExecute($sql, [$entryType, $startTime, $endTime, $leaveNote, $entryID]);
@@ -162,7 +159,7 @@ if ($entryID) {
                     StartTime = ?, 
                     EndTime = ?, 
                     LeaveNote = ?, 
-                    UpdatedAt = GETDATE()
+                    UpdatedAt = CURRENT_TIMESTAMP
                 WHERE ID = ?";
 
         $result = dbExecute($sql, [$entryType, $startTime, $endTime, $leaveNote, $existingEntry['ID']]);
@@ -191,11 +188,10 @@ if ($entryID) {
     if ($result) {
         echo json_encode(['success' => true, 'message' => 'Entry saved successfully', 'entry_id' => $entryID]);
     } else {
-        $errors = sqlsrv_errors();
-        $errorMsg = 'Failed to save entry';
-        if ($errors) {
-            $errorMsg .= ': ' . print_r($errors, true);
-        }
-        echo json_encode(['success' => false, 'message' => $errorMsg]);
+        global $dbErrorMessage; // from db.php if available via wrapper?
+        // Actually dbExecute returns false on error and logs to error_log.
+        // We can't easily get the error message unless we change dbExecute to return it or set a global.
+        // For now, generic error.
+        echo json_encode(['success' => false, 'message' => 'Failed to save entry. Check server logs.']);
     }
 }

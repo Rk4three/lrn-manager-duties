@@ -46,7 +46,7 @@ if ($entries) {
     foreach ($entries as $entry) {
         $formattedEntries[] = [
             'id' => $entry['ID'],
-            'date' => $entry['EntryDate']->format('Y-m-d'),
+            'date' => $entry['EntryDate'],
             'type' => $entry['EntryType'],
             'start_time' => $entry['StartTime'],
             'end_time' => $entry['EndTime'],

@@ -48,51 +48,25 @@ if (file_exists($csvPath)) {
     fclose($file);
 }
 
-// If we found EMPCODE, verify it exists in lrn_master_list and get additional info
-if ($employeeID && $connData) {
-    try {
-        $sql = "SELECT TOP 1 EmployeeID, Department, FullName
-                FROM lrn_master_list 
-                WHERE EmployeeID = ? AND IsActive = 1";
+// If we found EMPCODE, or if we just want to look up by ID/Name in DM_Users
+// Refactored for PostgreSQL / Independent DB: Query DM_Users
+$employeeID = null;
+$department = null;
 
-        $result = sqlsrv_query($connData, $sql, [$employeeID]);
-
-        if ($result) {
-            $row = sqlsrv_fetch_array($result, SQLSRV_FETCH_ASSOC);
-            if ($row) {
-                // Verify we got the right person
-                $employeeID = $row['EmployeeID']; // Confirmed EmployeeID
-                if (!$department && !empty($row['Department'])) {
-                    $department = $row['Department'];
-                }
-            }
-            sqlsrv_free_stmt($result);
-        }
-    } catch (Exception $e) {
-        error_log("Error verifying employee info from lrn_master_list: " . $e->getMessage());
+if ($managerID) {
+    // Lookup by ID
+    $user = dbQueryOne("SELECT \"EmployeeID\", \"Department\", \"Name\" FROM \"DM_Users\" WHERE \"ID\" = ?", [$managerID]);
+    if ($user) {
+        $employeeID = $user['EmployeeID'];
+        $department = $user['Department'];
+        // $managerName = $user['Name']; // Optional: update name from DB
     }
-} elseif (!$employeeID && $connData) {
-    // Fallback: If CSV didn't have EMPCODE, try to find in lrn_master_list by name
-    try {
-        $sql = "SELECT TOP 1 EmployeeID, Department 
-                FROM lrn_master_list 
-                WHERE FullName LIKE ? AND IsActive = 1
-                ORDER BY EmployeeID DESC";
-
-        $result = sqlsrv_query($connData, $sql, ['%' . $managerName . '%']);
-
-        if ($result) {
-            $row = sqlsrv_fetch_array($result, SQLSRV_FETCH_ASSOC);
-            if ($row) {
-                $employeeID = $row['EmployeeID'];
-                if (!$department && isset($row['Department'])) {
-                    $department = $row['Department'];
-                }
-            }
-            sqlsrv_free_stmt($result);
-        }
-    } catch (Exception $e) {
-        error_log("Error fetching employee info by name: " . $e->getMessage());
+} elseif ($managerName) {
+    // Lookup by Name (Fallback)
+    $user = dbQueryOne("SELECT \"EmployeeID\", \"Department\" FROM \"DM_Users\" WHERE \"Name\" = ?", [$managerName]);
+    if ($user) {
+        $employeeID = $user['EmployeeID'];
+        $department = $user['Department'];
     }
 }
 
